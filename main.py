@@ -21,7 +21,7 @@ COLOR_Y = image.Color.from_rgb(255, 255, 0)
 # =========================================================
 HISTORY_SAVE_FILE = "/root/inspection_history.txt"
 MAX_HISTORY_LEN = 20
-RECORD_TARGET_COUNT = 4
+RECORD_TARGET_COUNT = 20
 
 TARGET_CN_MAP = {
     "red_circle": "红圆",
@@ -1179,10 +1179,10 @@ class InspectionCarApp:
                                 self.ui_state = "running"
                                 self.uart_rx_text = self.uart_rx_text.replace("INSPECT_START\n", "")
 
-                            if "INSPECT_END" in self.uart_rx_text and not self.history_committed:
-                                print(f"[巡检完成] 收到单片机 INSPECT_END 信号，结束巡检")
+                            if ("INSPECT_END" in self.uart_rx_text or "end\n" in self.uart_rx_text.lower()) and not self.history_committed:
+                                print(f"[巡检完成] 收到单片机 end 信号，结束巡检并存入txt")
                                 self._commit_history_with_time()
-                                self.uart_rx_text = self.uart_rx_text.replace("INSPECT_END", "")
+                                self.uart_rx_text = self.uart_rx_text.replace("INSPECT_END", "").replace("end\n", "").replace("END\n", "")
 
                             if len(self.uart_rx_text) > 64:
                                 self.uart_rx_text = self.uart_rx_text[-64:]

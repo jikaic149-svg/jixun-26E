@@ -86,6 +86,9 @@ static uint8_t s_inspect_end_sent = 0;
 static uint8_t s_turn_signal_sent = 0;
 static int s_pending_led_color = -1; // -1:无, 0:绿, 1:红
 static int s_is_y_junction = 0;
+static int s_last_y_node = -1;
+static int s_last_y_choice = -1;
+static uint8_t s_car_end_sent = 0;
 
 static float GetNextTurnAngle(void) {
     int current_y_node = -1;
@@ -135,18 +138,32 @@ static float GetNextTurnAngle(void) {
             turn_angle = 60.0f;
             s_pending_led_color = 0;
         } else {
-            int best_heading = left_heading;
-            int min_dist = 999;
+            int left_dist = 999;
+            int right_dist = 999;
             for (int i = 0; i < 3; i++) {
                 if (hex_graph[current_y_node].heading[i] == left_heading) {
                     int n = hex_graph[current_y_node].neighbor[i];
-                    if (dist_to_O[n] < min_dist) { min_dist = dist_to_O[n]; best_heading = left_heading; }
+                    left_dist = dist_to_O[n];
                 }
                 if (hex_graph[current_y_node].heading[i] == right_heading) {
                     int n = hex_graph[current_y_node].neighbor[i];
-                    if (dist_to_O[n] < min_dist) { min_dist = dist_to_O[n]; best_heading = right_heading; }
+                    right_dist = dist_to_O[n];
                 }
             }
+            int best_heading = left_heading;
+            if (left_dist < right_dist) {
+                best_heading = left_heading;
+            } else if (right_dist < left_dist) {
+                best_heading = right_heading;
+            } else {
+                if (s_last_y_node == current_y_node) {
+                    best_heading = (s_last_y_choice == 0) ? right_heading : left_heading;
+                } else {
+                    best_heading = left_heading;
+                }
+            }
+            s_last_y_node = current_y_node;
+            s_last_y_choice = (best_heading == left_heading) ? 0 : 1;
             turn_angle = (best_heading == left_heading) ? 60.0f : -60.0f;
             s_pending_led_color = -1;
         }
@@ -169,19 +186,7 @@ static float GetNextTurnAngle(void) {
     if (turn_angle > 0) s_graph_heading = (s_graph_heading + 1) % 6;
     else s_graph_heading = (s_graph_heading + 5) % 6;
 
-    if (!s_inspect_end_sent && s_targets_recognized >= 4) {
-        int next_node = -1;
-        for (int i = 0; i < 3; i++) {
-            if (hex_graph[s_graph_curr_node].heading[i] == s_graph_heading) {
-                next_node = hex_graph[s_graph_curr_node].neighbor[i];
-                break;
-            }
-        }
-        if (next_node == NODE_O || s_graph_curr_node == NODE_O) {
-            BSP_UART1_SendString("INSPECT_END\n");
-            s_inspect_end_sent = 1;
-        }
-    }
+    // 删除了原有的达到4个目标即发送INSPECT_END的逻辑，改为在停车时发送end信号
 
     // 重置陀螺仪发送标志位，准备迎接下一次过弯的真实物理转向
     s_turn_signal_sent = 0;
@@ -205,6 +210,9 @@ void TaskTest_Init(void) {
     s_graph_heading = 3;
     s_targets_recognized = 0;
     s_inspect_end_sent = 0;
+    s_car_end_sent = 0;
+    s_last_y_node = -1;
+    s_last_y_choice = -1;
     Device_WS2812_Clear();
     Device_WS2812_Show();
     s_buzzer_timer = 0;
@@ -450,6 +458,10 @@ void TaskTest_Exec(void) {
             break;
             
         case TT_STATE_DONE:
+            if (!s_car_end_sent) {
+                BSP_UART1_SendString("end\n");
+                s_car_end_sent = 1;
+            }
             break;
     }
 }
