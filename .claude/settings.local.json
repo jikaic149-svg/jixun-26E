@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"TIMG.*Pub\\\\|setPublisher\\\\|setSubscriber\")",
+      "Bash(find \"C:\\\\Users\\\\Administrator\\\\workspace_ccstheia\\\\25E\" -type f -name \"*.c\" -o -name \"*.h\" | grep -iE \"\\(task|mode|main\\)\" | head -30)",
+      "Read(//c/Users/Administrator/workspace_ccstheia/25E/**)"
+    ]
+  }
+}
