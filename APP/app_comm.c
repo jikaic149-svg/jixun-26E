@@ -110,5 +110,13 @@ void App_Comm_Update(uint32_t elapsed_ms) {
             if (len >= sizeof(tx_buf)) len = sizeof(tx_buf) - 1; // 严防越界
             BSP_UART1_SendString((char*)tx_buf); // 临时改为阻塞发送，用于排查 DMA 问题
         }
+
+        // UART0 (USB 调试口) 单独打印简洁的当前轮速
+        char spd_buf[48];
+        int slen = snprintf(spd_buf, sizeof(spd_buf),
+            "L:%.1f R:%.1f\r\n", cur_L, cur_R);
+        if (slen > 0) {
+            BSP_UART_SendString(spd_buf);
+        }
     }
 }

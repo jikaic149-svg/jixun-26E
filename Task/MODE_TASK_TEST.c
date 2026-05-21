@@ -17,13 +17,38 @@ typedef enum {
     TT_STATE_DONE
 } TT_State_e;
 
-// 速度与几何补偿核心参数（随时可调）
-#define TT_STRAIGHT_SPEED   300.0f  // 冲刺极速：大幅提高至 300mm/s
-#define TT_CURVE_SPEED      220.0f  // 过弯速度：提升至 220mm/s
-#define TT_ACCEL_STEP       8.0f    // 出弯加速步长：提速更快
-#define TT_DECEL_STEP       10.0f   // 入弯减速步长：刹车更干脆
-#define TT_EARLY_TURN_DIST  116.0f  // 120切内圈，112抛外圈，取中间值 116.0f 定海神针
-#define TT_O_TO_A_DIST      250.0f  // O到A的实际起步距离 (210mm 基础 + 40mm 防压线后延补偿)
+// =========================================================
+// 【TaskTest 全局核心参数配置区 (Config)】
+// =========================================================
+// 1. 速度与运动控制
+#define CFG_SPEED_STRAIGHT      300.0f  // 直线冲刺极速 (mm/s)
+#define CFG_SPEED_CURVE         220.0f  // 弯道平稳速度 (mm/s)
+#define CFG_ACCEL_STEP          8.0f    // 加速步长 (越大加速越猛)
+#define CFG_DECEL_STEP          10.0f   // 减速步长 (越大刹车越急)
+
+// 2. 几何距离与航向
+#define CFG_DIST_O_TO_A         250.0f  // 起步 O到A 的目标距离 (210mm基础 + 40mm防压线补偿)
+#define CFG_DIST_HEX_SIDE       400.0f  // 六边形标准单边长 (mm)
+#define CFG_DIST_EARLY_TURN     116.0f  // 提前入弯补偿距离 (允许单片机稍晚读取视觉，免受遮挡)
+#define CFG_ANGLE_TURN          60.0f   // 六边形标准转向角度 (度)
+#define CFG_YAW_ERROR_TOLERANCE 2.0f    // 出弯航向锁定容忍度 (度，极其严苛地对正，防止整体偏置拉伸)
+
+// [Step 2.1 - 实跑回退] 架构 284.52 走多了，168 走少了，取中点 226 试探。
+// 首段/末段只发生 1 次，累计误差小，暂保留架构几何值；hex 边重复 6 次，先压低。
+// 调参原则：增大 → 入弯延后、直线更长；减小 → 入弯提前、直线更短。
+#define CFG_DIST_TANGENT        57.74f                                                  /* L_T 几何切线长 (R=100, θ=60°) */
+#define CFG_DIST_O_TO_A_PHYS    210.0f                                                  /* O ↔ A 物理距离 */
+#define CFG_DIST_FIRST_STRAIGHT (CFG_DIST_O_TO_A_PHYS - CFG_DIST_TANGENT)               /* 152.26mm: O→A 首段 */
+#define CFG_DIST_HEX_STRAIGHT   198.0f                                                  /* hex 边手调：二分逼近 (188~209) */
+#define CFG_DIST_FINAL_EXTRA    200.0f                                                  /* 末段额外推进 (越线裕量) */
+#define CFG_DIST_FINAL_STRAIGHT (CFG_DIST_O_TO_A_PHYS - CFG_DIST_TANGENT + CFG_DIST_FINAL_EXTRA) /* 352.26mm: A→O 末段 */
+
+// 3. 时序与传感器判定阈值
+#define CFG_TICK_START_DELAY    50      // 起步原地等待视觉识别的超时 tick (50 * 5ms = 250ms)
+#define CFG_TICK_BRAKE_TIMEOUT  200     // 终点强制刹车超时 tick (200 * 5ms = 1000ms)
+#define CFG_GYRO_WZ_THRESHOLD   80.0f   // 陀螺仪Z轴角速度触发阈值 (过滤直线颠簸，准确捕捉转弯甩尾)
+#define CFG_UI_LED_BUZZER_TIME  2000    // 路标识别成功时，LED与蜂鸣器持续发声的毫秒数
+// =========================================================
 
 static TT_State_e s_state;
 static uint32_t   s_tick = 0;
@@ -90,6 +115,10 @@ static int s_last_y_node = -1;
 static int s_last_y_choice = -1;
 static uint8_t s_car_end_sent = 0;
 
+static uint8_t s_node_visit_count[14][6] = {{0}};
+static int s_node_last_choice[14][6] = {{0}};
+static int s_is_clockwise = -1; // -1: 未判定, 1: 顺时针(去G), 0: 逆时针(去B)
+
 static float GetNextTurnAngle(void) {
     int current_y_node = -1;
     for (int i = 0; i < 3; i++) {
@@ -122,50 +151,66 @@ static float GetNextTurnAngle(void) {
         Broker_Publish_Int(TOPIC_VISION_COLOR, -1);
     }
     
-    float turn_angle = 60.0f;
+    float turn_angle = CFG_ANGLE_TURN;
 
     if (has_left && !has_right) {
-        turn_angle = 60.0f;
+        turn_angle = CFG_ANGLE_TURN;
         s_pending_led_color = -1;
     } else if (!has_left && has_right) {
-        turn_angle = -60.0f;
+        turn_angle = -CFG_ANGLE_TURN;
         s_pending_led_color = -1;
     } else {
+        s_node_visit_count[current_y_node][s_graph_heading]++; // 记录在该节点该进入方向的访问次数
+        
         if (vis_color == 1) { // 红色右转
-            turn_angle = -60.0f;
+            turn_angle = -CFG_ANGLE_TURN;
             s_pending_led_color = 1; // 仅记录，坚决不亮灯！
+            s_node_last_choice[current_y_node][s_graph_heading] = right_heading; // 记录在该进入方向选过的方向
         } else if (vis_color == 0) { // 绿色左转
-            turn_angle = 60.0f;
+            turn_angle = CFG_ANGLE_TURN;
             s_pending_led_color = 0;
+            s_node_last_choice[current_y_node][s_graph_heading] = left_heading; // 记录在该进入方向选过的方向
         } else {
             int left_dist = 999;
             int right_dist = 999;
             for (int i = 0; i < 3; i++) {
                 if (hex_graph[current_y_node].heading[i] == left_heading) {
                     int n = hex_graph[current_y_node].neighbor[i];
-                    left_dist = dist_to_O[n];
+                        left_dist = dist_to_O[n];
                 }
                 if (hex_graph[current_y_node].heading[i] == right_heading) {
                     int n = hex_graph[current_y_node].neighbor[i];
-                    right_dist = dist_to_O[n];
+                        right_dist = dist_to_O[n];
                 }
             }
             int best_heading = left_heading;
-            if (left_dist < right_dist) {
-                best_heading = left_heading;
-            } else if (right_dist < left_dist) {
-                best_heading = right_heading;
+            
+            // [全新探索算法] 
+            // A点(回城大门)特殊处理：在A点绝对不能瞎逛探索！强制最高优先级使用最短路径回原点。
+            if (current_y_node != NODE_A && s_node_visit_count[current_y_node][s_graph_heading] >= 2 && s_node_last_choice[current_y_node][s_graph_heading] != -1) {
+                best_heading = (s_node_last_choice[current_y_node][s_graph_heading] == left_heading) ? right_heading : left_heading;
             } else {
-                if (s_last_y_node == current_y_node) {
-                    best_heading = (s_last_y_choice == 0) ? right_heading : left_heading;
-                } else {
+                // 第一次来到这个节点，或者是A点，永远遵守最短路径原则保证回家效率
+                if (left_dist < right_dist) {
                     best_heading = left_heading;
+                } else if (right_dist < left_dist) {
+                    best_heading = right_heading;
+                } else {
+                    if (s_is_clockwise == 0) {
+                        best_heading = right_heading; // 逆时针时，距离相等默认选右
+                    } else {
+                        best_heading = left_heading;  // 顺时针或未判定时，距离相等默认选左
+                    }
                 }
             }
-            s_last_y_node = current_y_node;
-            s_last_y_choice = (best_heading == left_heading) ? 0 : 1;
-            turn_angle = (best_heading == left_heading) ? 60.0f : -60.0f;
+            
+            s_node_last_choice[current_y_node][s_graph_heading] = best_heading; // 更新在该进入方向的最新选择
+            turn_angle = (best_heading == left_heading) ? CFG_ANGLE_TURN : -CFG_ANGLE_TURN;
             s_pending_led_color = -1;
+        }
+        if (current_y_node == NODE_A && s_is_clockwise == -1) {
+            if (turn_angle > 0) s_is_clockwise = 0; // 左拐去 NODE_B，为逆时针
+            else s_is_clockwise = 1;                // 右拐去 NODE_G，为顺时针
         }
         if (s_targets_recognized < 4) s_targets_recognized++;
     }
@@ -213,6 +258,16 @@ void TaskTest_Init(void) {
     s_car_end_sent = 0;
     s_last_y_node = -1;
     s_last_y_choice = -1;
+    s_is_clockwise = -1;
+    
+    // 清空图遍历状态
+    for (int i = 0; i < 14; i++) {
+        for (int h = 0; h < 6; h++) {
+            s_node_visit_count[i][h] = 0;
+            s_node_last_choice[i][h] = -1;
+        }
+    }
+    
     Device_WS2812_Clear();
     Device_WS2812_Show();
     s_buzzer_timer = 0;
@@ -258,7 +313,7 @@ void TaskTest_Exec(void) {
         
         float wz = Broker_Subscribe_Float(TOPIC_JY61P_WZ);
         // 强化判定：提高到 80.0f 彻底免疫直线跑动中的任何颠簸晃动！
-        if (!s_turn_signal_sent && fabsf(wz) > 80.0f) {
+        if (!s_turn_signal_sent && fabsf(wz) > CFG_GYRO_WZ_THRESHOLD) {
             BSP_UART1_SendString("TURN\n");
             s_turn_signal_sent = 1;
             
@@ -268,13 +323,13 @@ void TaskTest_Exec(void) {
                 Device_WS2812_SetAll(255, 0, 0);
                 Device_WS2812_Show();
                 Device_Buzzer_Set(1); // 响蜂鸣器
-                s_buzzer_timer = 2000; // 红色长鸣/亮灯 2000ms
+                s_buzzer_timer = CFG_UI_LED_BUZZER_TIME; // 红色长鸣/亮灯 2000ms
             } else if (s_pending_led_color == 0) { // 绿色
                 s_active_ui_color = 0;
                 Device_WS2812_SetAll(0, 255, 0);
                 Device_WS2812_Show();
                 Device_Buzzer_Set(1); // 响蜂鸣器
-                s_buzzer_timer = 2000; // 绿色断续响/亮灯 2000ms
+                s_buzzer_timer = CFG_UI_LED_BUZZER_TIME; // 绿色断续响/亮灯 2000ms
             } else {
                 // 假如不到两秒又触发一次转向且没有目标，直接抢断关闭 UI 显示
                 Device_WS2812_Clear();
@@ -300,12 +355,22 @@ void TaskTest_Exec(void) {
             break;
             
         case TT_STATE_O_TO_A:
-            // 极限平滑软启动防甩尾
-            if (s_current_speed < TT_STRAIGHT_SPEED) s_current_speed += TT_ACCEL_STEP;
+            // 【极其关键】由于视觉在等待发车阶段处于休眠无识别状态，
+            // 收到发车信号后需要几十毫秒“睁眼”并处理第一帧发送。
+            // 但起步距离到判定线仅仅 15cm，一脚油门瞬间冲过导致视觉跟不上。
+            // 因此起步原地强行憋 500ms (50 个 tick) 留给视觉充分的识别时间！
+            if (s_tick < CFG_TICK_START_DELAY) {
+                Mode_SetStraight(0, s_target_yaw);
+                s_start_odo = GetOdo(); // 不断刷新起始里程，防止抖动
+                break;
+            }
+            
+            // 软起步加速
+            if (s_current_speed < CFG_SPEED_STRAIGHT) s_current_speed += CFG_ACCEL_STEP;
             Mode_SetStraight(s_current_speed, s_target_yaw);
             
-            // 几何切弯：提前切入外圈 (带防压线补偿)
-            if (fabsf(odo - s_start_odo) >= (TT_O_TO_A_DIST - TT_EARLY_TURN_DIST)) {
+            // [双状态机硬隔离] 直线段以 clean anchor 测量物理推进距离
+            if (fabsf(odo - s_start_odo) >= CFG_DIST_FIRST_STRAIGHT) {
                 float turn_angle = GetNextTurnAngle();
                 s_target_yaw = s_start_yaw + turn_angle; 
                 if (s_target_yaw > 180.0f) s_target_yaw -= 360.0f;
@@ -325,9 +390,9 @@ void TaskTest_Exec(void) {
             
         case TT_STATE_TURN_AT_A_IN:
             // 平滑减速至过弯速度
-            if (s_current_speed > TT_CURVE_SPEED) {
-                s_current_speed -= TT_DECEL_STEP;
-                if (s_current_speed < TT_CURVE_SPEED) s_current_speed = TT_CURVE_SPEED;
+            if (s_current_speed > CFG_SPEED_CURVE) {
+                s_current_speed -= CFG_DECEL_STEP;
+                if (s_current_speed < CFG_SPEED_CURVE) s_current_speed = CFG_SPEED_CURVE;
             }
             Mode_SetCurve(s_current_speed, s_target_yaw);
 
@@ -335,9 +400,10 @@ void TaskTest_Exec(void) {
             if (yaw_err > 180.0f) yaw_err -= 360.0f;
             if (yaw_err < -180.0f) yaw_err += 360.0f;
             
-            if (fabsf(yaw_err) <= 5.0f) { 
-                // 几何补偿
-                s_start_odo = odo - TT_EARLY_TURN_DIST; 
+            if (fabsf(yaw_err) <= CFG_YAW_ERROR_TOLERANCE) {
+                // [双状态机硬隔离] 进入 STRAIGHT 瞬间 clean anchor，
+                // 不再把弧线长度作为虚拟负初始里程塞进下一段
+                s_start_odo = odo;
                 s_hex_edge_idx = 0;
                 Mode_SetStraight(s_current_speed, s_target_yaw);
                 s_state = TT_STATE_HEX_STRAIGHT;
@@ -350,11 +416,25 @@ void TaskTest_Exec(void) {
             break;
             
         case TT_STATE_HEX_STRAIGHT:
-            // 出弯后软启动重新加速到极速
-            if (s_current_speed < TT_STRAIGHT_SPEED) s_current_speed += TT_ACCEL_STEP;
+            // [加快角度回直] 出弯航向未对正前先不加速，保持 220mm/s 弯道速度让 PID 用更多 tick 收敛 yaw
+            yaw_err = s_target_yaw - current_yaw;
+            if (yaw_err > 180.0f)  yaw_err -= 360.0f;
+            if (yaw_err < -180.0f) yaw_err += 360.0f;
+            if (fabsf(yaw_err) <= CFG_YAW_ERROR_TOLERANCE) {
+                // 航向已对齐 → 可以放胆冲到极速
+                if (s_current_speed < CFG_SPEED_STRAIGHT) s_current_speed += CFG_ACCEL_STEP;
+            }
+            // 否则 s_current_speed 保持出弯时的 CFG_SPEED_CURVE 220mm/s 不变
             Mode_SetStraight(s_current_speed, s_target_yaw);
             
-            if (fabsf(odo - s_start_odo) >= (400.0f - TT_EARLY_TURN_DIST)) {
+            // [自适应物理补偿] 应对轮胎打滑与电池衰减带来的物理抛离误差
+            // [微量物理补偿] 每弯温柔衰减 0.5f，完美压制轻微的打滑外抛
+            // 设置了缩短上限（最多减 4.0mm），防止如果在里面多绕了几圈导致无限内切
+            float decay_dist = s_hex_edge_idx * 0.5f;
+            if (decay_dist > 4.0f) decay_dist = 4.0f; 
+            float dynamic_target_dist = CFG_DIST_HEX_STRAIGHT - decay_dist;
+            
+            if (fabsf(odo - s_start_odo) >= dynamic_target_dist) {
                 float turn_angle = GetNextTurnAngle();
                 
                 s_target_yaw += turn_angle;
@@ -388,9 +468,9 @@ void TaskTest_Exec(void) {
             
         case TT_STATE_HEX_TURN:
             // 平滑减速
-            if (s_current_speed > TT_CURVE_SPEED) {
-                s_current_speed -= TT_DECEL_STEP;
-                if (s_current_speed < TT_CURVE_SPEED) s_current_speed = TT_CURVE_SPEED;
+            if (s_current_speed > CFG_SPEED_CURVE) {
+                s_current_speed -= CFG_DECEL_STEP;
+                if (s_current_speed < CFG_SPEED_CURVE) s_current_speed = CFG_SPEED_CURVE;
             }
             Mode_SetCurve(s_current_speed, s_target_yaw);
 
@@ -398,11 +478,13 @@ void TaskTest_Exec(void) {
             if (yaw_err > 180.0f) yaw_err -= 360.0f;
             if (yaw_err < -180.0f) yaw_err += 360.0f;
             
-            if (fabsf(yaw_err) <= 5.0f) {
-                s_start_odo = odo - TT_EARLY_TURN_DIST;
+            if (fabsf(yaw_err) <= CFG_YAW_ERROR_TOLERANCE) {
+                // [双状态机硬隔离] clean anchor 切回 STRAIGHT
+                s_start_odo = odo;
+                s_hex_edge_idx++; // 记录转弯次数，用于后续的里程递减补偿
                 Mode_SetStraight(s_current_speed, s_target_yaw);
                 s_state = TT_STATE_HEX_STRAIGHT;
-                
+
                 // 强制清空视觉残影，准备迎接下一个路口 (不再强制熄灯，交由两秒定时器处理)
                 s_pending_led_color = -1;
                 
@@ -414,9 +496,9 @@ void TaskTest_Exec(void) {
 
         case TT_STATE_A_TO_O_TURN:
             // 平滑减速
-            if (s_current_speed > TT_CURVE_SPEED) {
-                s_current_speed -= TT_DECEL_STEP;
-                if (s_current_speed < TT_CURVE_SPEED) s_current_speed = TT_CURVE_SPEED;
+            if (s_current_speed > CFG_SPEED_CURVE) {
+                s_current_speed -= CFG_DECEL_STEP;
+                if (s_current_speed < CFG_SPEED_CURVE) s_current_speed = CFG_SPEED_CURVE;
             }
             Mode_SetCurve(s_current_speed, s_target_yaw);
 
@@ -424,8 +506,9 @@ void TaskTest_Exec(void) {
             if (yaw_err > 180.0f) yaw_err -= 360.0f;
             if (yaw_err < -180.0f) yaw_err += 360.0f;
 
-            if (fabsf(yaw_err) <= 5.0f) {
-                s_start_odo = odo - TT_EARLY_TURN_DIST;
+            if (fabsf(yaw_err) <= CFG_YAW_ERROR_TOLERANCE) {
+                // [双状态机硬隔离] clean anchor 切入末段直线
+                s_start_odo = odo;
                 Mode_SetStraight(s_current_speed, s_target_yaw);
                 s_state = TT_STATE_A_TO_O_STRAIGHT;
                 
@@ -435,15 +518,22 @@ void TaskTest_Exec(void) {
                 s_turn_signal_sent = 0;
                 Broker_Publish_Int(TOPIC_VISION_COLOR, -1);
                 BSP_UART1_SendString("TURN_END\n");
+                
+                // 极限保险机制：在 A 节点切弯结束、对准 O 点刚起步的瞬间，立刻发送 end 存盘！
+                // 此时所有的色块都已遍历完毕，立刻交卷能防止归途撞墙或断电导致没存上！
+                if (!s_car_end_sent) {
+                    BSP_UART1_SendString("end\n");
+                    s_car_end_sent = 1;
+                }
             }
             break;
             
         case TT_STATE_A_TO_O_STRAIGHT:
-            if (s_current_speed < TT_STRAIGHT_SPEED) s_current_speed += TT_ACCEL_STEP;
+            if (s_current_speed < CFG_SPEED_STRAIGHT) s_current_speed += CFG_ACCEL_STEP;
             Mode_SetStraight(s_current_speed, s_target_yaw);
             
-            // 终点刹车：带防压线补偿
-            if (fabsf(odo - s_start_odo) >= TT_O_TO_A_DIST) {
+            // 终点刹车：clean anchor 下的物理推进距离判定
+            if (fabsf(odo - s_start_odo) >= CFG_DIST_FINAL_STRAIGHT) {
                 Mode_SetBrake();
                 s_state = TT_STATE_BRAKE_FINAL;
                 s_tick = 0;
@@ -451,7 +541,7 @@ void TaskTest_Exec(void) {
             break;
             
         case TT_STATE_BRAKE_FINAL:
-            if (Mode_IsBrakeDone() || s_tick > 200) {
+            if (Mode_IsBrakeDone() || s_tick > CFG_TICK_BRAKE_TIMEOUT) {
                 Mode_SetDone();
                 s_state = TT_STATE_DONE;
             }
