@@ -1,0 +1,23 @@
+{
+  "configurations": [
+    {
+      "name": "MSPM0G3519",
+      "compilerPath": "D:/GCC/ARMGCC/10 2021.10/bin/arm-none-eabi-gcc.exe",
+      "compileCommands": "${workspaceFolder}/build/MSPM0G3519/Debug/compile_commands.json",
+      "defines": ["__MSPM0G3519__"],
+      "compilerArgs": ["-mcpu=cortex-m0plus", "-march=armv6-m", "-mthumb", "-mfloat-abi=soft"],
+      "cStandard": "c11",
+      "intelliSenseMode": "gcc-arm"
+    },
+    {
+      "name": "MSPM0G3507",
+      "compilerPath": "D:/GCC/ARMGCC/10 2021.10/bin/arm-none-eabi-gcc.exe",
+      "compileCommands": "${workspaceFolder}/build/MSPM0G3507/Debug/compile_commands.json",
+      "defines": ["__MSPM0G3507__"],
+      "compilerArgs": ["-mcpu=cortex-m0plus", "-march=armv6-m", "-mthumb", "-mfloat-abi=soft"],
+      "cStandard": "c11",
+      "intelliSenseMode": "gcc-arm"
+    }
+  ],
+  "version": 4
+}

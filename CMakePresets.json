@@ -1,0 +1,150 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "environment": {
+        "ARM_GCC_ROOT": "D:/GCC/ARMGCC/10 2021.10",
+        "HOME": "$penv{USERPROFILE}",
+        "PATH": "D:/GCC/ARMGCC/10 2021.10/bin;D:/CMAKE/bin;D:/Ninja;$penv{SystemRoot}/System32;$penv{SystemRoot}"
+      },
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/config/cmake/arm-gcc-toolchain.cmake",
+        "CMAKE_MAKE_PROGRAM": "D:/Ninja/ninja.exe",
+        "ARM_GCC_ROOT": "D:/GCC/ARMGCC/10 2021.10",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "TEMPLATE_TASK": "minimal",
+        "TEMPLATE_FREERTOS_USE_HEAP_4": false,
+        "TEMPLATE_FREERTOS_USE_TIMERS": false,
+        "TEMPLATE_FREERTOS_USE_EVENT_GROUPS": false,
+        "TEMPLATE_FREERTOS_USE_STREAM_BUFFERS": false,
+        "TEMPLATE_FREERTOS_USE_TRACE": false,
+        "TEMPLATE_ENABLE_ALGORITHM_SPSC_RING": false,
+        "TEMPLATE_ENABLE_ALGORITHM_PACKET": false,
+        "TEMPLATE_ENABLE_ALGORITHM_RELIABLE_LINK": false,
+        "TEMPLATE_ENABLE_ALGORITHM_CONTROL": false,
+        "TEMPLATE_ENABLE_ALGORITHM_FILTER": false,
+        "TEMPLATE_ENABLE_ALGORITHM_ATTITUDE": false,
+        "TEMPLATE_ENABLE_ALGORITHM_LINE_TRACKING": false,
+        "TEMPLATE_ENABLE_ALGORITHM_LQR": false,
+        "TEMPLATE_ENABLE_ALGORITHM_ADRC": false,
+        "TEMPLATE_ENABLE_ALGORITHM_CRC": false,
+        "TEMPLATE_ENABLE_DEVICE_KEY": false,
+        "TEMPLATE_ENABLE_DEVICE_MOTOR": false,
+        "TEMPLATE_ENABLE_DEVICE_SERVO": false,
+        "TEMPLATE_ENABLE_DEVICE_SOLENOID": false,
+        "TEMPLATE_ENABLE_DEVICE_QD4310": false,
+        "TEMPLATE_ENABLE_DEVICE_ENCODER": false,
+        "TEMPLATE_ENABLE_DEVICE_LINE_TRACKING": false,
+        "TEMPLATE_ENABLE_DEVICE_JY61P": false,
+        "TEMPLATE_ENABLE_DEVICE_BMI088": false,
+        "TEMPLATE_ENABLE_DEVICE_ICM45686": false,
+        "TEMPLATE_ENABLE_DEVICE_VISION": false,
+        "TEMPLATE_ENABLE_DEVICE_IMU": false,
+        "TEMPLATE_ENABLE_DEVICE_CHASSIS_COMMAND": false,
+        "TEMPLATE_ENABLE_DEVICE_SERIAL": false
+      }
+    },
+    {
+      "name": "g3507-debug",
+      "displayName": "MSPM0G3507 - Debug",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/MSPM0G3507/Debug",
+      "cacheVariables": {
+        "MSPM0_DEVICE": "MSPM0G3507",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "g3519-debug",
+      "displayName": "MSPM0G3519 - Debug",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/MSPM0G3519/Debug",
+      "cacheVariables": {
+        "MSPM0_DEVICE": "MSPM0G3519",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "g3507-release",
+      "displayName": "MSPM0G3507 - Release",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/MSPM0G3507/Release",
+      "cacheVariables": {
+        "MSPM0_DEVICE": "MSPM0G3507",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "g3519-release",
+      "displayName": "MSPM0G3519 - Release",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/MSPM0G3519/Release",
+      "cacheVariables": {
+        "MSPM0_DEVICE": "MSPM0G3519",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "g3507-hex25e-debug",
+      "displayName": "MSPM0G3507 - Hex25E Debug",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/Tasks/Hex25E/MSPM0G3507/Debug",
+      "cacheVariables": {
+        "MSPM0_DEVICE": "MSPM0G3507",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "TEMPLATE_TASK": "hex25e"
+      }
+    },
+    {
+      "name": "g3519-hex25e-debug",
+      "displayName": "MSPM0G3519 - Hex25E Debug",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/Tasks/Hex25E/MSPM0G3519/Debug",
+      "cacheVariables": {
+        "MSPM0_DEVICE": "MSPM0G3519",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "TEMPLATE_TASK": "hex25e"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "build-g3507-debug",
+      "configurePreset": "g3507-debug",
+      "jobs": 8
+    },
+    {
+      "name": "build-g3519-debug",
+      "configurePreset": "g3519-debug",
+      "jobs": 8
+    },
+    {
+      "name": "build-g3507-release",
+      "configurePreset": "g3507-release",
+      "jobs": 8
+    },
+    {
+      "name": "build-g3519-release",
+      "configurePreset": "g3519-release",
+      "jobs": 8
+    },
+    {
+      "name": "build-g3507-hex25e-debug",
+      "configurePreset": "g3507-hex25e-debug",
+      "jobs": 8
+    },
+    {
+      "name": "build-g3519-hex25e-debug",
+      "configurePreset": "g3519-hex25e-debug",
+      "jobs": 8
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "cmake.cmakePath": "D:/CMAKE/bin/cmake.exe",
+  "cmake.useCMakePresets": "always",
+  "cmake.configureOnOpen": false,
+  "cmake.preferredGenerators": ["Ninja"],
+  "C_Cpp.default.compilerPath": "D:/GCC/ARMGCC/10 2021.10/bin/arm-none-eabi-gcc.exe",
+  "cortex-debug.armToolchainPath": "D:/GCC/ARMGCC/10 2021.10/bin",
+  "cortex-debug.gdbPath": "D:/GCC/ARMGCC/10 2021.10/bin/arm-none-eabi-gdb.exe",
+  "cortex-debug.objdumpPath": "D:/GCC/ARMGCC/10 2021.10/bin/arm-none-eabi-objdump.exe",
+  "cortex-debug.liveWatchRefreshRate": 300,
+  "terminal.integrated.env.windows": {
+    "HOME": "${env:USERPROFILE}",
+    "ARM_GCC_ROOT": "D:/GCC/ARMGCC/10 2021.10",
+    "CMAKE_ROOT": "D:/CMAKE",
+    "NINJA_ROOT": "D:/Ninja",
+    "OPENOCD_G3507_ROOT": "D:/OPENOCD/xpack-openocd-0.12.0-7",
+    "OPENOCD_G3519_ROOT": "D:/OPENOCD/openocd-custom-20260615",
+    "MSPM0_SDK_ROOT": "${workspaceFolder}/../TI ENV/mspm0_sdk_2_10_00_04",
+    "SYSCONFIG_ROOT": "${workspaceFolder}/../TI ENV/sysconfig_1.27.1"
+  },
+  "files.associations": {
+    "*.h": "c",
+    "*.c": "c",
+    "*.syscfg": "javascript"
+  }
+}

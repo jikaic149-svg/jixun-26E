@@ -1,0 +1,3 @@
+# Copy this file to: ../TI ENV/local/openocd/daplink.cfg
+# Then uncomment the next line and replace the placeholder.
+# adapter serial "<DAPLink serial>"

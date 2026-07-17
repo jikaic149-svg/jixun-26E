@@ -1,0 +1,60 @@
+/**
+ * @cliArgs --device "MSPM0G350X" --part "Default" --package "LQFP-64(PM)" --product "mspm0_sdk@2.10.00.04"
+ * @v2CliArgs --device "MSPM0G3507" --package "LQFP-64(PM)" --product "mspm0_sdk@2.10.00.04"
+ * @versions {"tool":"1.27.1+4634"}
+ */
+
+const SYSCTL = scripting.addModule("/ti/driverlib/SYSCTL");
+SYSCTL.forceDefaultClkConfig = true;
+
+const GPIO    = scripting.addModule("/ti/driverlib/GPIO", {}, false);
+const KeyGPIO = GPIO.addInstance();
+const EncoderGPIO = GPIO.addInstance();
+const QEI     = scripting.addModule("/ti/driverlib/QEI", {}, false);
+const LeftQEI = QEI.addInstance();
+const CAPTURE = scripting.addModule("/ti/driverlib/CAPTURE", {}, false);
+const RightEncoderCapture = CAPTURE.addInstance();
+
+KeyGPIO.$name                              = "USER_KEY";
+KeyGPIO.associatedPins.create(1);
+KeyGPIO.associatedPins[0].$name            = "INPUT";
+KeyGPIO.associatedPins[0].direction        = "INPUT";
+KeyGPIO.associatedPins[0].internalResistor = "PULL_UP";
+KeyGPIO.associatedPins[0].pin.$assign      = "PB21";
+
+LeftQEI.$name                              = "LEFT_QEI";
+LeftQEI.loadValue                         = 0xFFFF;
+LeftQEI.timerStartTimer                    = true;
+LeftQEI.peripheral.$assign                 = "TIMG8";
+LeftQEI.peripheral.ccp0Pin.$assign         = "PA29";
+LeftQEI.peripheral.ccp1Pin.$assign         = "PA30";
+LeftQEI.ccp0PinConfig.enableConfig         = true;
+LeftQEI.ccp0PinConfig.internalResistor     = "PULL_UP";
+LeftQEI.ccp0PinConfig.$name                = "ti_driverlib_gpio_LeftEncoderA";
+LeftQEI.ccp1PinConfig.enableConfig         = true;
+LeftQEI.ccp1PinConfig.internalResistor     = "PULL_UP";
+LeftQEI.ccp1PinConfig.$name                = "ti_driverlib_gpio_LeftEncoderB";
+
+RightEncoderCapture.$name                          = "RIGHT_ENCODER_CAPTURE";
+RightEncoderCapture.profile                        = "duty_cycle_period";
+RightEncoderCapture.captFilter                     = true;
+RightEncoderCapture.filterPeriod                   = "PER_8";
+RightEncoderCapture.timerStartTimer                = false;
+RightEncoderCapture.interrupts                     = ["CC0_DN"];
+RightEncoderCapture.peripheral.$assign             = "TIMG7";
+RightEncoderCapture.peripheral.ccp0Pin.$assign     = "PA26";
+RightEncoderCapture.ccp0PinConfig.enableConfig     = true;
+RightEncoderCapture.ccp0PinConfig.internalResistor = "PULL_UP";
+RightEncoderCapture.ccp0PinConfig.$name            = "ti_driverlib_gpio_RightEncoderA";
+
+EncoderGPIO.$name                              = "SOFT_ENCODER";
+EncoderGPIO.associatedPins.create(1);
+EncoderGPIO.associatedPins[0].$name            = "RIGHT_B";
+EncoderGPIO.associatedPins[0].direction        = "INPUT";
+EncoderGPIO.associatedPins[0].internalResistor = "PULL_UP";
+EncoderGPIO.associatedPins[0].pin.$assign      = "PA27";
+
+const Board                       = scripting.addModule("/ti/driverlib/Board", {}, false);
+Board.peripheral.$assign          = "DEBUGSS";
+Board.peripheral.swclkPin.$assign = "PA20";
+Board.peripheral.swdioPin.$assign = "PA19";

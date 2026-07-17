@@ -1,0 +1,73 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "MSPM0G3519: Build + Flash + Debug",
+      "type": "cortex-debug",
+      "request": "launch",
+      "servertype": "openocd",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/Current/MSPM0G3519/Debug/MSPM0G3519.elf",
+      "loadFiles": [],
+      "serverpath": "D:/OPENOCD/openocd-custom-20260615/bin/openocd.exe",
+      "searchDir": [
+        "D:/OPENOCD/openocd-custom-20260615/share/openocd/scripts"
+      ],
+      "configFiles": [
+        "${workspaceFolder}/config/openocd/mspm0_daplink_custom.cfg"
+      ],
+      "gdbPath": "D:/GCC/ARMGCC/10 2021.10/bin/arm-none-eabi-gdb.exe",
+      "objdumpPath": "D:/GCC/ARMGCC/10 2021.10/bin/arm-none-eabi-objdump.exe",
+      "device": "MSPM0G3519",
+      "svdFile": "${workspaceFolder}/../TI ENV/svd/MSPM0G351X.svd",
+      "preLaunchTask": "MSPM0G3519: Build + Flash",
+      "runToEntryPoint": "main",
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      },
+      "showDevDebugOutput": "none"
+    },
+    {
+      "name": "MSPM0G3519: SysConfig",
+      "type": "node-terminal",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}/tools/mspm0.ps1\" -Action SysConfig -Device MSPM0G3519"
+    },
+    {
+      "name": "MSPM0G3507: Build + Flash + Debug",
+      "type": "cortex-debug",
+      "request": "launch",
+      "servertype": "openocd",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/Current/MSPM0G3507/Debug/MSPM0G3507.elf",
+      "loadFiles": [],
+      "serverpath": "D:/OPENOCD/xpack-openocd-0.12.0-7/bin/openocd.exe",
+      "searchDir": [
+        "D:/OPENOCD/xpack-openocd-0.12.0-7/openocd/scripts"
+      ],
+      "configFiles": [
+        "${workspaceFolder}/config/openocd/mspm0_xds110.cfg"
+      ],
+      "gdbPath": "D:/GCC/ARMGCC/10 2021.10/bin/arm-none-eabi-gdb.exe",
+      "objdumpPath": "D:/GCC/ARMGCC/10 2021.10/bin/arm-none-eabi-objdump.exe",
+      "device": "MSPM0G3507",
+      "svdFile": "${workspaceFolder}/../TI ENV/svd/MSPM0G350X.svd",
+      "preLaunchTask": "MSPM0G3507: Build + Flash",
+      "runToEntryPoint": "main",
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      },
+      "showDevDebugOutput": "none"
+    },
+    {
+      "name": "MSPM0G3507: SysConfig",
+      "type": "node-terminal",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}/tools/mspm0.ps1\" -Action SysConfig -Device MSPM0G3507"
+    }
+  ]
+}

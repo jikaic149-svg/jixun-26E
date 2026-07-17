@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+*.cfg text eol=lf
+*.cmake text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.ps1 text eol=lf
+*.syscfg text eol=lf
+
+# Preserve the vendored upstream FreeRTOS tree byte-for-byte.
+FreeRTOS/Kernel/** -text
