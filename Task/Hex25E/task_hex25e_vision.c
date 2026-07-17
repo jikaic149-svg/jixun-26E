@@ -95,6 +95,14 @@ static void update_snapshots(void)
     if (Device_Vision_GetLatestResult(&g_vision.vision, &snapshot)) {
         g_vision.status.color = snapshot.result.color;
         g_vision.status.shape = snapshot.result.shape;
+        g_vision.status.context_id = snapshot.result.context_id;
+        g_vision.status.class_id = snapshot.result.class_id;
+        g_vision.status.confidence_per_mille =
+            snapshot.result.confidence_per_mille;
+        g_vision.status.center_x = snapshot.result.center_x;
+        g_vision.status.center_y = snapshot.result.center_y;
+        g_vision.status.has_classification =
+            snapshot.result.has_classification;
         g_vision.status.generation = snapshot.generation;
         g_vision.status.has_result = true;
     }
@@ -198,4 +206,13 @@ Device_Vision_BeginResult Task_Hex25E_Vision_BeginCommand(
     }
     return Device_Vision_BeginCommand(
         &g_vision.vision, command, request);
+}
+
+Device_Vision_BeginResult Task_Hex25E_Vision_BeginContext(
+    uint16_t context_id)
+{
+    if (!g_vision.initialized) {
+        return DEVICE_VISION_BEGIN_INVALID_ARGUMENT;
+    }
+    return Device_Vision_BeginContext(&g_vision.vision, context_id);
 }

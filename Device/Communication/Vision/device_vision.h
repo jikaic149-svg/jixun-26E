@@ -32,6 +32,12 @@ typedef enum {
 typedef struct {
     Device_Vision_Color color;
     Device_Vision_Shape shape;
+    uint16_t context_id;
+    uint16_t class_id;
+    uint16_t confidence_per_mille;
+    int16_t center_x;
+    int16_t center_y;
+    bool has_classification;
 } Device_Vision_Result;
 
 typedef enum {
@@ -50,6 +56,7 @@ typedef enum {
     DEVICE_VISION_EVENT_REMOTE_START = 0,
     DEVICE_VISION_EVENT_REMOTE_END,
     DEVICE_VISION_EVENT_REMOTE_REQUEST,
+    DEVICE_VISION_EVENT_REMOTE_CONTEXT,
 } Device_Vision_EventType;
 
 typedef struct {
@@ -57,6 +64,7 @@ typedef struct {
     uint32_t sender_session;
     uint16_t sequence;
     Device_Vision_Request request;
+    uint16_t context_id;
 } Device_Vision_Event;
 
 typedef struct {
@@ -174,6 +182,12 @@ Device_Vision_BeginResult Device_Vision_BeginCommand(
     Device_Vision *vision,
     Device_Vision_Command command,
     Device_Vision_Request request);
+
+/* Sends a reliable, application-defined numeric context.  The Device layer
+ * does not assign meaning to the value; a Task may use it for a waypoint,
+ * workpiece slot, camera pose, or another protocol context. */
+Device_Vision_BeginResult Device_Vision_BeginContext(
+    Device_Vision *vision, uint16_t context_id);
 
 /* Peek does not consume a send attempt. After UART returns OK, call Commit;
  * after blocking completion or exactly one DMA callback, call TxComplete. */

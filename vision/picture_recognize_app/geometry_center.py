@@ -253,11 +253,14 @@ def find_geometry_center(img, obj):
         return None, roi
 
     if config.TARGET_SHAPE_ID == 1:
-        return find_rectangle_center(img, border), roi
+        rectangle = find_rectangle_center(img, border)
+        if rectangle is not None:
+            rectangle["shape"] = "SQUARE"
+        return rectangle, roi
 
     if config.TARGET_SHAPE_ID == 2:
         return {
-            "shape": "ELLIPSE",
+            "shape": "CIRCLE",
             "shape_id": 2,
             "cx": border["cx"],
             "cy": border["cy"],
@@ -266,9 +269,13 @@ def find_geometry_center(img, obj):
             "border": border,
         }, roi
 
+    rectangle = find_rectangle_center(img, border)
+    if rectangle is not None:
+        rectangle["shape"] = "SQUARE"
+        return rectangle, roi
     return {
-        "shape": "BORDER",
-        "shape_id": 0,
+        "shape": "CIRCLE",
+        "shape_id": 2,
         "cx": border["cx"],
         "cy": border["cy"],
         "score": border["score"],

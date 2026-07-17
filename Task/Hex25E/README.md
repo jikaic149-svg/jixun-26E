@@ -41,6 +41,22 @@ are available in `Task_Hex25E_Status` and the `g_TASK_HeadingLetter*` debug
 variables. Zero means the nose is not currently aligned with a labelled
 direction. These fields are not added to the compact VOFA stream.
 
+## Vision inspection and power-loss display
+
+The MCU vision link uses UART0 at 115200 baud: PB0 is MCU TX and PB1 is MCU
+RX. Connect MaixCAM A16/TX to PB1, A17/RX to PB0, and connect the two grounds.
+The MCU sends a reliable START when the route begins, sends the current A-to-N
+heading as a numeric CONTEXT while the nose aligns with a labelled direction,
+and sends END after returning to O.
+
+The MaixCAM recognizes dog, cat, pig, sedan, bus, and truck, and classifies the
+marker as square or circle. A result must be centered and stable for three
+frames before it is accepted. Every accepted `location + shape + class` entry
+is immediately flushed to persistent storage and returned to the MCU in a
+DETECTION packet. END stores the inspection duration. After a power cycle the
+camera screen displays all saved entries and `检+<seconds>s` until the next
+START.
+
 ## Indicators
 
 - Normal: RGB green, LED1 on, LED2 off.

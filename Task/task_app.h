@@ -28,6 +28,9 @@ extern volatile uint32_t g_TASK_VisionFault;
 extern volatile uint32_t g_TASK_VisionGeneration;
 extern volatile uint32_t g_TASK_VisionColor;
 extern volatile uint32_t g_TASK_VisionShape;
+extern volatile uint32_t g_TASK_VisionClass;
+extern volatile uint32_t g_TASK_VisionLocation;
+extern volatile uint32_t g_TASK_VisionConfidence;
 extern volatile uint8_t
     g_TASK_HeadingLetterLog[TASK_HEADING_LETTER_LOG_CAPACITY];
 

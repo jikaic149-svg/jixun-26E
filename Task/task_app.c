@@ -17,6 +17,10 @@ static Device_JY61P_Snapshot g_TASK_Hex25EIMUSnapshot;
 static Device_KeyInput g_TASK_Hex25EUserKey;
 static bool g_TASK_Hex25EIMUReady;
 static bool g_TASK_Hex25EVisionReady;
+static bool g_TASK_VisionInspectionStarted;
+static bool g_TASK_VisionInspectionEnded;
+static char g_TASK_VisionPendingLocation;
+static char g_TASK_VisionSentLocation;
 #endif
 
 static StaticTask_t g_TASK_ControlTCB;
@@ -45,6 +49,9 @@ volatile uint32_t g_TASK_VisionFault = 0U;
 volatile uint32_t g_TASK_VisionGeneration = 0U;
 volatile uint32_t g_TASK_VisionColor = 0U;
 volatile uint32_t g_TASK_VisionShape = 0U;
+volatile uint32_t g_TASK_VisionClass = 0U;
+volatile uint32_t g_TASK_VisionLocation = 0U;
+volatile uint32_t g_TASK_VisionConfidence = 0U;
 volatile uint8_t
     g_TASK_HeadingLetterLog[TASK_HEADING_LETTER_LOG_CAPACITY] = {0U};
 
@@ -104,6 +111,10 @@ static bool Task_Hex25E_StartRoute(void)
         return false;
     }
     g_TASK_Fault = 0U;
+    g_TASK_VisionInspectionStarted = false;
+    g_TASK_VisionInspectionEnded = false;
+    g_TASK_VisionPendingLocation = '\0';
+    g_TASK_VisionSentLocation = '\0';
     return true;
 }
 
@@ -132,7 +143,25 @@ static void Task_RunHex25EOnce(void)
                 g_TASK_VisionGeneration = vision_status.generation;
                 g_TASK_VisionColor = (uint32_t)vision_status.color;
                 g_TASK_VisionShape = (uint32_t)vision_status.shape;
+                if (vision_status.has_classification) {
+                    g_TASK_VisionClass = vision_status.class_id;
+                    g_TASK_VisionLocation = vision_status.context_id;
+                    g_TASK_VisionConfidence =
+                        vision_status.confidence_per_mille;
+                }
             }
+        }
+    }
+
+    if (g_TASK_Hex25EVisionReady &&
+        g_TASK_Hex25EStatus.motors_enabled &&
+        !g_TASK_VisionInspectionStarted) {
+        const Device_Vision_BeginResult result =
+            Task_Hex25E_Vision_BeginCommand(
+                DEVICE_VISION_COMMAND_START,
+                DEVICE_VISION_REQUEST_BOTH);
+        if (result == DEVICE_VISION_BEGIN_OK) {
+            g_TASK_VisionInspectionStarted = true;
         }
     }
 
@@ -200,6 +229,38 @@ static void Task_RunHex25EOnce(void)
         &g_TASK_Hex25E, g_TASK_NowMs,
         HEX25E_CONFIG_CONTROL_PERIOD_SECONDS, &attitude,
         &g_TASK_Hex25EStatus);
+
+    if ((g_TASK_Hex25EStatus.current_heading_letter >= 'A') &&
+        (g_TASK_Hex25EStatus.current_heading_letter <= 'N') &&
+        (g_TASK_Hex25EStatus.current_heading_letter !=
+            g_TASK_VisionSentLocation)) {
+        g_TASK_VisionPendingLocation =
+            g_TASK_Hex25EStatus.current_heading_letter;
+    }
+    if (g_TASK_Hex25EVisionReady &&
+        g_TASK_VisionInspectionStarted &&
+        (g_TASK_VisionPendingLocation >= 'A') &&
+        (g_TASK_VisionPendingLocation <= 'N')) {
+        const Device_Vision_BeginResult result =
+            Task_Hex25E_Vision_BeginContext((uint16_t)
+                (g_TASK_VisionPendingLocation - 'A'));
+        if (result == DEVICE_VISION_BEGIN_OK) {
+            g_TASK_VisionSentLocation = g_TASK_VisionPendingLocation;
+            g_TASK_VisionPendingLocation = '\0';
+        }
+    }
+    if (g_TASK_Hex25EVisionReady &&
+        g_TASK_VisionInspectionStarted &&
+        !g_TASK_VisionInspectionEnded &&
+        (g_TASK_Hex25EStatus.state == TASK_HEX25E_STATE_DONE)) {
+        const Device_Vision_BeginResult result =
+            Task_Hex25E_Vision_BeginCommand(
+                DEVICE_VISION_COMMAND_END,
+                DEVICE_VISION_REQUEST_BOTH);
+        if (result == DEVICE_VISION_BEGIN_OK) {
+            g_TASK_VisionInspectionEnded = true;
+        }
+    }
     const Task_Hex25E_Telemetry telemetry =
         Task_MakeHex25ETelemetry(&g_TASK_Hex25EStatus);
 
@@ -282,6 +343,9 @@ bool Task_Init(void)
     g_TASK_VisionGeneration = 0U;
     g_TASK_VisionColor = 0U;
     g_TASK_VisionShape = 0U;
+    g_TASK_VisionClass = 0U;
+    g_TASK_VisionLocation = 0U;
+    g_TASK_VisionConfidence = 0U;
     for (size_t index = 0U;
          index < TASK_HEADING_LETTER_LOG_CAPACITY; ++index) {
         g_TASK_HeadingLetterLog[index] = 0U;
@@ -302,6 +366,10 @@ bool Task_Init(void)
     g_TASK_Hex25EIMUSnapshot = (Device_JY61P_Snapshot){0};
     g_TASK_Hex25EIMUReady = Task_Hex25E_IMU_Init();
     g_TASK_Hex25EVisionReady = Task_Hex25E_Vision_Init();
+    g_TASK_VisionInspectionStarted = false;
+    g_TASK_VisionInspectionEnded = false;
+    g_TASK_VisionPendingLocation = '\0';
+    g_TASK_VisionSentLocation = '\0';
     if (!Task_Hex25E_Comm_Init() ||
         !g_TASK_Hex25EVisionReady ||
         !Device_KeyInput_Init(

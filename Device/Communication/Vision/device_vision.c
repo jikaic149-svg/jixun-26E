@@ -97,6 +97,55 @@ static bool Device_Vision_ParseHex(
     return true;
 }
 
+static bool Device_Vision_ParseUnsignedDecimal(
+    const uint8_t *bytes,
+    size_t length,
+    uint32_t maximum,
+    uint32_t *value)
+{
+    uint32_t parsed = 0U;
+    size_t index;
+
+    if ((bytes == NULL) || (value == NULL) || (length == 0U) ||
+        ((length > 1U) && (bytes[0] == (uint8_t)'0'))) {
+        return false;
+    }
+    for (index = 0U; index < length; ++index) {
+        uint32_t digit;
+
+        if ((bytes[index] < (uint8_t)'0') ||
+            (bytes[index] > (uint8_t)'9')) {
+            return false;
+        }
+        digit = (uint32_t)(bytes[index] - (uint8_t)'0');
+        if ((parsed > (maximum / 10U)) ||
+            ((parsed == (maximum / 10U)) &&
+             (digit > (maximum % 10U)))) {
+            return false;
+        }
+        parsed = parsed * 10U + digit;
+    }
+    *value = parsed;
+    return true;
+}
+
+static size_t Device_Vision_WriteUnsignedDecimal(
+    uint16_t value, uint8_t *output)
+{
+    uint8_t reversed[5U];
+    size_t length = 0U;
+    size_t index;
+
+    do {
+        reversed[length++] = (uint8_t)('0' + (value % 10U));
+        value = (uint16_t)(value / 10U);
+    } while (value != 0U);
+    for (index = 0U; index < length; ++index) {
+        output[index] = reversed[length - index - 1U];
+    }
+    return length;
+}
+
 static bool Device_Vision_ParseSession(
     const uint8_t *bytes, size_t length, uint32_t *session)
 {
@@ -247,6 +296,12 @@ static bool Device_Vision_ParseResult(
     }
 
     snapshot->has_correlation = false;
+    snapshot->result.has_classification = false;
+    snapshot->result.context_id = 0U;
+    snapshot->result.class_id = 0U;
+    snapshot->result.confidence_per_mille = 0U;
+    snapshot->result.center_x = 0;
+    snapshot->result.center_y = 0;
     snapshot->correlation.request_sender_session = 0U;
     snapshot->correlation.request_sequence = 0U;
     if (field_count == 4U) {
@@ -273,6 +328,53 @@ static bool Device_Vision_ParseResult(
     }
     snapshot->correlation.request_sequence = (uint16_t)request_sequence;
     snapshot->has_correlation = true;
+    return true;
+}
+
+static bool Device_Vision_ParseDetection(
+    const uint8_t *payload,
+    size_t length,
+    Device_Vision_ResultSnapshot *snapshot)
+{
+    const uint8_t *fields[7U];
+    size_t field_lengths[7U];
+    size_t field_count;
+    uint32_t context_id;
+    uint32_t class_id;
+    uint32_t confidence;
+    uint32_t center_x;
+    uint32_t center_y;
+
+    if (!Device_Vision_SplitFields(payload, length,
+            fields, field_lengths, 7U, &field_count) ||
+        (field_count != 7U) ||
+        !Device_Vision_ParseSession(
+            fields[0], field_lengths[0], &snapshot->sender_session) ||
+        !Device_Vision_ParseUnsignedDecimal(
+            fields[1], field_lengths[1], UINT16_MAX, &context_id) ||
+        !Device_Vision_ParseUnsignedDecimal(
+            fields[2], field_lengths[2], UINT16_MAX, &class_id) ||
+        !Device_Vision_ParseShape(
+            fields[3], field_lengths[3], &snapshot->result.shape) ||
+        !Device_Vision_ParseUnsignedDecimal(
+            fields[4], field_lengths[4], 1000U, &confidence) ||
+        !Device_Vision_ParseUnsignedDecimal(
+            fields[5], field_lengths[5], INT16_MAX, &center_x) ||
+        !Device_Vision_ParseUnsignedDecimal(
+            fields[6], field_lengths[6], INT16_MAX, &center_y)) {
+        return false;
+    }
+
+    snapshot->result.color = DEVICE_VISION_COLOR_UNKNOWN;
+    snapshot->result.context_id = (uint16_t)context_id;
+    snapshot->result.class_id = (uint16_t)class_id;
+    snapshot->result.confidence_per_mille = (uint16_t)confidence;
+    snapshot->result.center_x = (int16_t)center_x;
+    snapshot->result.center_y = (int16_t)center_y;
+    snapshot->result.has_classification = true;
+    snapshot->has_correlation = false;
+    snapshot->correlation.request_sender_session = 0U;
+    snapshot->correlation.request_sequence = 0U;
     return true;
 }
 
@@ -412,8 +514,41 @@ static Device_Vision_FeedResult Device_Vision_HandlePacket(
         return Device_Vision_HandleCritical(
             vision, packet, &event, ack_output, ack_capacity, ack_length);
     }
+    if (Device_Vision_TypeEquals(packet, "CONTEXT")) {
+        uint32_t context_id;
+
+        if ((packet->payload_length < 10U) ||
+            (packet->payload[8] != (uint8_t)',') ||
+            !Device_Vision_ParseSession(
+                packet->payload, 8U, &event.sender_session) ||
+            !Device_Vision_ParseUnsignedDecimal(
+                &packet->payload[9], packet->payload_length - 9U,
+                UINT16_MAX, &context_id)) {
+            return DEVICE_VISION_FEED_SEMANTIC_REJECTED;
+        }
+        event.type = DEVICE_VISION_EVENT_REMOTE_CONTEXT;
+        event.context_id = (uint16_t)context_id;
+        return Device_Vision_HandleCritical(
+            vision, packet, &event, ack_output, ack_capacity, ack_length);
+    }
     if (Device_Vision_TypeEquals(packet, "RESULT")) {
         if (!Device_Vision_ParseResult(
+                packet->payload, packet->payload_length, &snapshot)) {
+            return DEVICE_VISION_FEED_SEMANTIC_REJECTED;
+        }
+        snapshot.sequence = packet->sequence;
+        snapshot.generation = Device_Vision_NextGeneration(
+            vision->has_latest_result
+                ? vision->latest_result.generation
+                : 0U);
+        vision->latest_result = snapshot;
+        vision->has_latest_result = true;
+        Device_Vision_IncrementSaturating(
+            &vision->stats.result_snapshots_updated);
+        return DEVICE_VISION_FEED_RESULT_UPDATED;
+    }
+    if (Device_Vision_TypeEquals(packet, "DETECTION")) {
+        if (!Device_Vision_ParseDetection(
                 packet->payload, packet->payload_length, &snapshot)) {
             return DEVICE_VISION_FEED_SEMANTIC_REJECTED;
         }
@@ -575,6 +710,31 @@ Device_Vision_BeginResult Device_Vision_BeginCommand(
     }
     result = Algorithm_ReliableLink_Begin(
         &vision->critical_tx, type, payload, payload_length);
+    if (result == ALGORITHM_RELIABLE_LINK_BEGIN_OK) {
+        return DEVICE_VISION_BEGIN_OK;
+    }
+    if (result == ALGORITHM_RELIABLE_LINK_BEGIN_BUSY) {
+        return DEVICE_VISION_BEGIN_BUSY;
+    }
+    return DEVICE_VISION_BEGIN_FRAME_ERROR;
+}
+
+Device_Vision_BeginResult Device_Vision_BeginContext(
+    Device_Vision *vision, uint16_t context_id)
+{
+    uint8_t payload[14U];
+    size_t payload_length = 9U;
+    Algorithm_ReliableLink_BeginResult result;
+
+    if ((vision == NULL) || !vision->initialized) {
+        return DEVICE_VISION_BEGIN_INVALID_ARGUMENT;
+    }
+    Device_Vision_WriteHex32(vision->local_session, payload);
+    payload[8] = (uint8_t)',';
+    payload_length += Device_Vision_WriteUnsignedDecimal(
+        context_id, &payload[payload_length]);
+    result = Algorithm_ReliableLink_Begin(
+        &vision->critical_tx, "CONTEXT", payload, payload_length);
     if (result == ALGORITHM_RELIABLE_LINK_BEGIN_OK) {
         return DEVICE_VISION_BEGIN_OK;
     }
