@@ -36,7 +36,9 @@ UART_RX_LIMIT = 256
 HISTORY_FILE = "/root/inspection_history.txt"
 HISTORY_TEMP_FILE = "/root/inspection_history.tmp"
 MAX_RECORDS = 14
-DETECTION_STABLE_FRAMES = 3
+# 车辆以 60 deg/s 连续旋转；一个 5 deg 朝向窗口仅约 167 ms，不能要求
+# 连续多帧。YOLO 置信度、外框几何和居中条件共同完成单帧有效性判断。
+DETECTION_STABLE_FRAMES = 1
 DETECTION_CENTER_TOLERANCE_PX = 35
 
 # 顺序必须和 data.yaml 及 .mud 完全一致。

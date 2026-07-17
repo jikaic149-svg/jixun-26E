@@ -50,8 +50,9 @@ heading as a numeric CONTEXT while the nose aligns with a labelled direction,
 and sends END after returning to O.
 
 The MaixCAM recognizes dog, cat, pig, sedan, bus, and truck, and classifies the
-marker as square or circle. A result must be centered and stable for three
-frames before it is accepted. Every accepted `location + shape + class` entry
+marker as square or circle. During the continuous 60-degree-per-second sweep,
+one centered result above the configured confidence threshold is accepted;
+each letter can be recorded only once. Every accepted `location + shape + class` entry
 is immediately flushed to persistent storage and returned to the MCU in a
 DETECTION packet. END stores the inspection duration. After a power cycle the
 camera screen displays all saved entries and `检+<seconds>s` until the next
